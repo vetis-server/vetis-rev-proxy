@@ -191,7 +191,7 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
         .start()
         .await?;
 
-    let cert = fs::read(format!("../{CA_CERT}")).await?;
+    let cert = fs::read(CA_CERT).await?;
     let client = deboa_tokio::Client::builder()
         .certificate(DeboaCertificate::from_slice(&cert, ContentEncoding::DER))
         .prior_knowledge(true)
