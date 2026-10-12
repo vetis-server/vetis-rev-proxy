@@ -29,7 +29,7 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
 
     let source_host_config = HostConfig::builder()
         .hostname("localhost")
-        .root_directory("..")
+        .root_directory(".")
         .protos(&[Version::HTTP_11])
         .tls(security_config)
         .bind_addresses(&[(
@@ -50,7 +50,7 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
 
     let target_host_config = HostConfig::builder()
         .hostname("localhost")
-        .root_directory("..")
+        .root_directory(".")
         .bind_addresses(&[(
             "0.0.0.0"
                 .parse()
@@ -146,7 +146,7 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
 
     let target_host_config = HostConfig::builder()
         .hostname("localhost")
-        .root_directory("..")
+        .root_directory(".")
         .bind_addresses(&[(
             "0.0.0.0"
                 .parse()
