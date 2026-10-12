@@ -125,7 +125,7 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
 
     let source_host_config = HostConfig::builder()
         .hostname("localhost")
-        .root_directory("..")
+        .root_directory(".")
         .protos(&[Version::HTTP_11])
         .tls(security_config.clone())
         .bind_addresses(&[(
