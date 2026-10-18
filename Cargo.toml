@@ -17,15 +17,15 @@ default = ["runtime-tokio"]
 runtime-tokio = ["dep:deboa-tokio", "dep:vetis-tokio"]
 
 [dependencies]
-deboa = { version = "0.1.5-beta.3" }
-deboa-tokio = { version = "0.1.4-beta.3", optional = true }
+deboa = { version = "0.1.5-beta.7" }
+deboa-tokio = { version = "0.1.4-beta.8", optional = true }
 http = "1.5.0"
 http-body-util = "0.1.5"
 once_cell = "1.21.4"
 serde = { version = "1.0.228", features = ["derive"] }
 typetag = "0.2.21"
-vetis = { version = "0.1.7-beta.5" }
-vetis-tokio = { version = "0.1.2-beta.6", optional = true }
+vetis = { version = "0.1.7-beta.6" }
+vetis-tokio = { version = "0.1.2-beta.8", optional = true }
 
 [dev-dependencies]
 caramelo = "0.1.5"
