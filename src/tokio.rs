@@ -1,6 +1,5 @@
 use crate::ReverseProxyPathConfig;
-use deboa::{HttpClient as _, request::DeboaRequest};
-use deboa_tokio::{Client, client::http::conn::pool::HttpConnectionPool};
+use deboa_tokio::{Client, HttpClient as _, client::HttpConnectionPool, request::DeboaRequest};
 use once_cell::sync::Lazy;
 use vetis::{
     Request, Response, VetisFutureResult,
