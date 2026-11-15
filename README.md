@@ -35,9 +35,14 @@ Configure reverse proxy using the builder pattern:
 
 ```rust,ignore
 use vetis_proxy::ProxyHookConfig;
+use vetis_matchers::request::{PathMatcher, PathMatcherConfig};
 
 let config = ProxyHookConfig::builder()
-    .uri("/api")
+    .matcher(PathMatcher::new(
+        PathMatcherConfig::builder()
+            .add_path("/api*")
+            .build()?,
+    ))
     .target("http://localhost:8080")
     .build()?;
 ```
@@ -46,7 +51,10 @@ let config = ProxyHookConfig::builder()
 
 ```yaml
 type: rev-proxy
-uri: /api
+matcher:
+  type: "path"
+  paths:
+    - "/api*"
 target: http://localhost:8080
 ```
 
@@ -54,7 +62,7 @@ target: http://localhost:8080
 
 #### ProxyHookConfig
 
-- **uri**: The URI prefix for the proxy path (required)
+- **matcher**: If set, this hook will be only called if request meet the criteria defined by him, otherwise, all requests will call this hook (optional)
 - **target**: The target URL to forward requests to (required)
 
 ## Runtime-Specific Modules
