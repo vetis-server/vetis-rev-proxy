@@ -34,9 +34,9 @@ Currently only Tokio runtime is supported:
 Configure reverse proxy using the builder pattern:
 
 ```rust,ignore
-use vetis_proxy::ProxyPathConfig;
+use vetis_proxy::ProxyHookConfig;
 
-let config = ProxyPathConfig::builder()
+let config = ProxyHookConfig::builder()
     .uri("/api")
     .target("http://localhost:8080")
     .build()?;
@@ -52,7 +52,7 @@ target: http://localhost:8080
 
 ### Configuration Options
 
-#### ProxyPathConfig
+#### ProxyHookConfig
 
 - **uri**: The URI prefix for the proxy path (required)
 - **target**: The target URL to forward requests to (required)
