@@ -10,23 +10,31 @@ readme = "README.md"
 license = "MIT OR Apache-2.0"
 keywords = ["http", "modules", "server", "rest-server"]
 publish = true
-rust-version = "1.85.0"
+rust-version = "1.86.0"
+
+[package.metadata.cargo-machete]
+ignored = ["cel"]
 
 [features]
 default = ["runtime-tokio"]
 runtime-tokio = ["dep:deboa-tokio", "dep:vetis-tokio"]
 
 [dependencies]
-deboa = { version = "0.1.5-beta.7" }
-deboa-tokio = { version = "0.1.4-beta.8", optional = true }
+cel = "0.16.0"
+deboa = { version = "0.1.5" }
+deboa-tokio = { version = "0.1.4", optional = true }
 http = "1.5.0"
 http-body-util = "0.1.5"
 once_cell = "1.21.4"
-serde = { version = "1.0.228", features = ["derive"] }
+serde = { version = "1.0.228", features = ["derive", "rc"] }
 typetag = "0.2.21"
-vetis = { version = "0.1.7-beta.6" }
-vetis-tokio = { version = "0.1.2-beta.8", optional = true }
+vetis = { path = "../vetis/vetis" }
+vetis-tokio = { path = "../vetis-tokio", optional = true }
 
 [dev-dependencies]
 caramelo = "0.1.5"
-tokio = { version = "1.53.1", default-features = false, features = ["macros"] }
+tokio = { version = "1.54.1", default-features = false, features = ["macros"] }
+
+# [patch.crates-io]
+# vetis = { path = "../vetis/vetis" }
+# vetis-tokio = { path = "../vetis-tokio" }
