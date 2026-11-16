@@ -2423,7 +2423,7 @@ dependencies = [
  "deboa",
  "deboa-tokio",
  "http",
- "http-body-util",
+ "hyper-body-utils",
  "once_cell",
  "serde",
  "tokio",

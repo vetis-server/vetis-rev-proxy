@@ -2,10 +2,13 @@
 #![deny(missing_docs)]
 use serde::{Deserialize, Serialize};
 use vetis::{
-    VetisResult, errors::{ConfigError, VetisError}, host::path::{Path, PathConfig},
+    VetisHook, VetisResult,
+    errors::{ConfigError, VetisError},
+    hook::HookConfig,
+    matcher::MatcherConfig,
 };
 
-use crate::tokio::ReveseProxyPath;
+use crate::tokio::ReverseProxyHook;
 
 #[cfg(feature = "runtime-tokio")]
 /// Tokio runtime support module
@@ -14,21 +17,24 @@ pub mod tokio;
 #[cfg(test)]
 mod tests;
 
-/// Builder for creating `ProxyPathConfig` instances.
+/// Builder for creating `ProxyHookConfig` instances.
 #[derive(Deserialize)]
-pub struct ReverseProxyPathConfigBuilder {
-    uri: String,
+pub struct ReverseProxyHookConfigBuilder {
+    matcher: Option<Box<dyn MatcherConfig>>,
     target: String,
 }
 
-impl ReverseProxyPathConfigBuilder {
-    /// Allow set the URI of the proxy path.
+impl ReverseProxyHookConfigBuilder {
+    /// Allow set a matcher
     ///
     /// # Returns
     ///
     /// * `Self` - The builder.
-    pub fn uri(mut self, uri: &str) -> Self {
-        self.uri = uri.to_string();
+    pub fn add_matcher<M>(mut self, matcher: M) -> Self
+    where
+        M: MatcherConfig + Send + Sync + 'static,
+    {
+        self.matcher = Some(Box::new(matcher));
         self
     }
 
@@ -42,68 +48,61 @@ impl ReverseProxyPathConfigBuilder {
         self
     }
 
-    /// Build the `ReverseProxyPathConfig` with the configured settings.
+    /// Build the `ReverseProxyHookConfig` with the configured settings.
     ///
     /// # Returns
     ///
-    /// * `VetisResult<ReverseProxyPathConfig>` - The `ReverseProxyPathConfig` with the configured settings.
-    pub fn build(self) -> VetisResult<ReverseProxyPathConfig> {
-        if self.uri.is_empty() {
-            return Err(VetisError::Config(ConfigError::Path("URI cannot be empty".to_string())));
-        }
+    /// * `VetisResult<ReverseProxyHookConfig>` - The `ReverseProxyHookConfig` with the configured settings.
+    pub fn build(self) -> VetisResult<ReverseProxyHookConfig> {
         if self
             .target
             .is_empty()
         {
-            return Err(VetisError::Config(ConfigError::Path(
-                "Target cannot be empty".to_string(),
-            )));
+            return Err(VetisError::Config(ConfigError::hook("Target cannot be empty")));
         }
 
-        Ok(ReverseProxyPathConfig { uri: self.uri, target: self.target })
+        Ok(ReverseProxyHookConfig {
+            matcher: self
+                .matcher
+                .map_or(None, |val| Some(val)),
+            target: self.target,
+        })
     }
 }
 
 /// Configuration for a proxy path.
 #[derive(Clone, Serialize, Deserialize)]
-pub struct ReverseProxyPathConfig {
-    uri: String,
+pub struct ReverseProxyHookConfig {
+    matcher: Option<Box<dyn MatcherConfig>>,
     target: String,
-    // TODO: Add custom proxy rules
-
+    // TODO: Add custom reverse proxy rules
     // TODO: Add support for custom headers
 }
 
 #[typetag::serde(name = "rev-proxy")]
-impl PathConfig for ReverseProxyPathConfig {
-    fn uri(&mut self, uri: &str) {
-        self.uri = uri.to_string();
+impl HookConfig for ReverseProxyHookConfig {
+    fn matcher(&self) -> Option<&Box<dyn MatcherConfig>> {
+        self.matcher
+            .as_ref()
     }
 
-    fn boxed_clone(&self) -> Box<dyn PathConfig> {
+    fn boxed_clone(&self) -> Box<dyn HookConfig> {
         Box::new(self.clone())
     }
 
-    fn boxed_path(&self) -> Box<dyn Path> {
-        Box::new(ReveseProxyPath::new(self.clone()))
-    }
-
-    fn boxed_sync(&self) -> Box<dyn Path + Send + Sync> {
-        Box::new(ReveseProxyPath::new(self.clone()))
+    fn boxed_hook(&self) -> Box<dyn VetisHook> {
+        Box::new(ReverseProxyHook::new(self.clone()))
     }
 }
 
-impl ReverseProxyPathConfig {
-    /// Creates a new `ProxyPathConfigBuilder` with default settings.
+impl ReverseProxyHookConfig {
+    /// Creates a new `ProxyHookConfigBuilder` with default settings.
     ///
     /// # Returns
     ///
-    /// * `ProxyPathConfigBuilder` - The builder.
-    pub fn builder() -> ReverseProxyPathConfigBuilder {
-        ReverseProxyPathConfigBuilder {
-            uri: "/test".to_string(),
-            target: "http://localhost:8080".to_string(),
-        }
+    /// * `ProxyHookConfigBuilder` - The builder.
+    pub fn builder() -> ReverseProxyHookConfigBuilder {
+        ReverseProxyHookConfigBuilder { matcher: None, target: "http://localhost:8080".to_string() }
     }
 
     /// Returns the target of the proxy path.

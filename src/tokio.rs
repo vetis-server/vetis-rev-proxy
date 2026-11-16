@@ -1,10 +1,13 @@
-use crate::ReverseProxyPathConfig;
+use crate::ReverseProxyHookConfig;
+use cel::Context;
 use deboa_tokio::{Client, HttpClient as _, client::HttpConnectionPool, request::DeboaRequest};
+use http::StatusCode;
 use once_cell::sync::Lazy;
 use vetis::{
     Request, Response, VetisFutureResult,
-    errors::{HostError, VetisError},
-    host::{HostContext, path::Path},
+    errors::{HostError, RuntimeError, VetisError},
+    hook::{Hook, HookConfig as _, HookPhase},
+    matcher::Matcher,
 };
 
 static CLIENT: Lazy<Client> = Lazy::new(|| {
@@ -15,11 +18,15 @@ static CLIENT: Lazy<Client> = Lazy::new(|| {
 });
 
 /// Proxy path
-pub struct ReveseProxyPath {
-    config: ReverseProxyPathConfig,
+pub struct ReverseProxyHook {
+    matcher: Option<Box<dyn Matcher>>,
+    config: ReverseProxyHookConfig,
 }
 
-impl ReveseProxyPath {
+unsafe impl Send for ReverseProxyHook {}
+unsafe impl Sync for ReverseProxyHook {}
+
+impl ReverseProxyHook {
     /// Create a new proxy path with provided configuration
     ///
     /// # Arguments
@@ -28,76 +35,110 @@ impl ReveseProxyPath {
     ///
     /// # Returns
     ///
-    /// * `ProxyPath` - The proxy path
-    pub fn new(config: ReverseProxyPathConfig) -> ReveseProxyPath {
-        ReveseProxyPath { config }
+    /// * `ProxyHook` - The proxy path
+    pub fn new(config: ReverseProxyHookConfig) -> ReverseProxyHook {
+        let matcher = if let Some(matcher_config) = config.matcher() {
+            Some(matcher_config.boxed_matcher())
+        } else {
+            None
+        };
+
+        ReverseProxyHook { matcher, config }
     }
 }
 
-impl Path for ReveseProxyPath {
-    /// Get the URI of the proxy path
-    ///
-    /// # Returns
-    ///
-    /// * `&str` - The URI of the proxy path
-    fn uri(&self) -> &str {
-        &self.config.uri
+impl Hook for ReverseProxyHook {
+    fn has_matches(&self, context: &Context) -> bool {
+        if let Some(matcher) = &self.matcher { matcher.is_match(context) } else { true }
     }
 
-    /// Handle proxy request
-    ///
-    /// # Arguments
-    ///
-    /// * `request` - The request to handle
-    /// * `uri` - The URI of the request
-    ///
-    /// # Returns
-    ///
-    /// * `Pin<Box<dyn Future<Output = Result<Response, VetisError>> + Send + Sync + '_>>` - The future that will resolve to the response
+    fn phase(&self) -> &HookPhase {
+        &HookPhase::Access
+    }
+
+    fn matcher_mut(&mut self) -> Option<&mut Box<dyn Matcher>> {
+        self.matcher
+            .as_mut()
+    }
+
     fn handle<'a>(
         &'a self,
         request: Request,
-        host_context: HostContext,
-    ) -> VetisFutureResult<'a, Response> {
-        let (request_parts, request_body) = request.into_parts();
+        _response: Option<Response>,
+    ) -> VetisFutureResult<'a, (Request, Option<Response>)> {
+        let future = async move {
+            let target = self.config.target();
 
-        let target = self.config.target();
+            let (request_parts, request_body) = request.into_parts();
 
-        Box::pin(async move {
-            let target_url = format!("{}{}", target, host_context.path_uri());
-            let deboa_request = match DeboaRequest::at(target_url, request_parts.method) {
+            let target_url = format!(
+                "{}{}",
+                target,
+                request_parts
+                    .uri
+                    .path()
+            );
+            let deboa_request = match DeboaRequest::at(
+                target_url,
+                request_parts
+                    .method
+                    .clone(),
+            ) {
                 Ok(request) => request,
-                Err(e) => return Err(VetisError::Host(HostError::Proxy(e.to_string()))),
+                Err(e) => {
+                    return Err(VetisError::Host(HostError::Runtime(
+                        RuntimeError::new(&e.to_string()).with_status_code(StatusCode::BAD_GATEWAY),
+                    )));
+                }
             };
 
             let deboa_request = match deboa_request
                 .version(request_parts.version)
-                .headers(request_parts.headers)
+                .headers(
+                    request_parts
+                        .headers
+                        .clone(),
+                )
                 .body(request_body)
                 .build()
             {
                 Ok(request) => request,
-                Err(e) => return Err(VetisError::Host(HostError::Proxy(e.to_string()))),
+                Err(e) => {
+                    return Err(VetisError::Host(HostError::Runtime(
+                        RuntimeError::new(&e.to_string()).with_status_code(StatusCode::BAD_GATEWAY),
+                    )));
+                }
             };
 
             // TODO: Check errors and handle them properly by returning a proper response 500, 503 or 504
-            let response = CLIENT
+            let upstream_response = CLIENT
                 .execute(deboa_request)
                 .await;
 
-            let response = match response {
+            let upstream_response = match upstream_response {
                 Ok(response) => response,
-                Err(e) => return Err(VetisError::Host(HostError::Proxy(e.to_string()))),
+                Err(e) => {
+                    return Err(VetisError::Host(HostError::Runtime(
+                        RuntimeError::new(&e.to_string()).with_status_code(StatusCode::BAD_GATEWAY),
+                    )));
+                }
             };
 
-            let (response_parts, response_body) = response.into_parts();
+            let (response_parts, response_body) = upstream_response.into_parts();
 
-            let vetis_response = Response::builder()
-                .status(response_parts.status)
-                .headers(response_parts.headers)
-                .body(response_body);
+            let request =
+                Request::from_parts(request_parts.clone(), hyper_body_utils::HttpBody::empty());
 
-            Ok::<Response, VetisError>(vetis_response)
-        })
+            let response = Some(
+                Response::builder()
+                    .status(response_parts.status)
+                    .headers(response_parts.headers)
+                    .body(response_body),
+            );
+
+            Ok((request, response))
+        };
+
+        Box::pin(future)
     }
 }

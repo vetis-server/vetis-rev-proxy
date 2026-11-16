@@ -24,7 +24,7 @@ cel = "0.16.0"
 deboa = { version = "0.1.5" }
 deboa-tokio = { version = "0.1.4", optional = true }
 http = "1.5.0"
-http-body-util = "0.1.5"
+hyper-body-utils = "0.1.18"
 once_cell = "1.21.4"
 serde = { version = "1.0.228", features = ["derive", "rc"] }
 typetag = "0.2.21"

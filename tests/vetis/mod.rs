@@ -5,16 +5,16 @@ use deboa::{
 };
 use deboa_tokio::cert::DeboaCertificate;
 use http::{StatusCode, Version};
-use http_body_util::BodyExt as _;
 use tokio::fs;
-use vetis::{Response, VetisServer as _, VetisTestResult, host::Host as _};
-use vetis_rev_proxy::{ReverseProxyPathConfig, tokio::ReveseProxyPath};
+use vetis::{
+    VetisTestResult,
+    host::{Host as _, HostConfig},
+};
+use vetis_rev_proxy::{ReverseProxyHookConfig, tokio::ReverseProxyHook};
 use vetis_tokio::{
-    HostConfig, TlsConfig, Vetis,
-    host::{
-        Host,
-        path::{HandlerPath, handler_fn},
-    },
+    Response, TlsConfig, Vetis, VetisServer as _,
+    hook::{HandlerHook, handler_fn},
+    host::Host,
 };
 
 use crate::common::{CA_CERT, SERVER_CERT, SERVER_KEY};
@@ -41,9 +41,8 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
         .build()?;
 
     let mut source_host = Host::new(source_host_config).await?;
-    source_host.add_path(ReveseProxyPath::new(
-        ReverseProxyPathConfig::builder()
-            .uri("/")
+    source_host.add_hook(ReverseProxyHook::new(
+        ReverseProxyHookConfig::builder()
             .target("http://localhost:8085")
             .build()?,
     ));
@@ -60,13 +59,13 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
         .build()?;
 
     let mut target_host = Host::new(target_host_config).await?;
-    target_host.add_path(
-        HandlerPath::builder()
-            .uri("/")
-            .handler(handler_fn(|_req, _ctx| async move {
-                Ok(Response::builder()
+    target_host.add_hook(
+        HandlerHook::builder()
+            .handler(handler_fn(|_request| async move {
+                let response = Response::builder()
                     .status(StatusCode::OK)
-                    .text("Hello, world!"))
+                    .text("Hello, world!");
+                Ok(response)
             }))
             .build()?,
     );
@@ -137,9 +136,8 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
         .build()?;
 
     let mut source_host = Host::new(source_host_config).await?;
-    source_host.add_path(ReveseProxyPath::new(
-        ReverseProxyPathConfig::builder()
-            .uri("/")
+    source_host.add_hook(ReverseProxyHook::new(
+        ReverseProxyHookConfig::builder()
             .target("http://localhost:9094")
             .build()?,
     ));
@@ -156,19 +154,15 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
         .build()?;
 
     let mut target_host = Host::new(target_host_config).await?;
-    target_host.add_path(
-        HandlerPath::builder()
-            .uri("/")
-            .handler(handler_fn(|req, _ctx| async move {
-                let (_parts, body) = req.into_parts();
-                let text = body
-                    .collect()
-                    .await
-                    .unwrap()
-                    .to_bytes();
-                Ok(Response::builder()
+    target_host.add_hook(
+        HandlerHook::builder()
+            .handler(handler_fn(|request| async move {
+                let (_, body) = request.into_parts();
+                let response = Response::builder()
                     .status(StatusCode::OK)
-                    .bytes(text.as_ref()))
+                    .body(body);
+
+                Ok(response)
             }))
             .build()?,
     );
