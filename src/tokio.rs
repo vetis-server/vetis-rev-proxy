@@ -1,12 +1,14 @@
 use crate::ReverseProxyHookConfig;
 use cel::Context;
 use deboa_tokio::{Client, HttpClient as _, client::HttpConnectionPool, request::DeboaRequest};
+
 use http::StatusCode;
 use once_cell::sync::Lazy;
 use vetis::{
-    Request, Response, VetisFutureResult,
+    HookPhases, Request, Response, VetisFutureResult,
     errors::{HostError, RuntimeError, VetisError},
     hook::{Hook, HookConfig as _, HookPhase},
+    make_bitflags,
     matcher::Matcher,
 };
 
@@ -52,8 +54,8 @@ impl Hook for ReverseProxyHook {
         if let Some(matcher) = &self.matcher { matcher.is_match(context) } else { true }
     }
 
-    fn phase(&self) -> &HookPhase {
-        &HookPhase::Access
+    fn phases(&self) -> HookPhases {
+        make_bitflags!(HookPhase::Access)
     }
 
     fn matcher_mut(&mut self) -> Option<&mut Box<dyn Matcher>> {

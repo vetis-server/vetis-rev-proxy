@@ -50,7 +50,7 @@ let config = ProxyHookConfig::builder()
 ### vetis.yaml
 
 ```yaml
-type: rev-proxy
+name: rev-proxy
 matcher:
   type: "path"
   paths:
