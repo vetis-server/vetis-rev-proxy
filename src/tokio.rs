@@ -5,10 +5,9 @@ use deboa_tokio::{Client, HttpClient as _, client::HttpConnectionPool, request::
 use http::StatusCode;
 use once_cell::sync::Lazy;
 use vetis::{
-    HookPhases, Request, Response, VetisFutureResult,
+    Request, Response, VetisFutureResult,
     errors::{HostError, RuntimeError, VetisError},
-    hook::{Hook, HookConfig as _, HookPhase},
-    make_bitflags,
+    hook::{Hook, HookConfig as _, HookPhase, HookPhases},
     matcher::Matcher,
 };
 
@@ -55,7 +54,7 @@ impl Hook for ReverseProxyHook {
     }
 
     fn phases(&self) -> HookPhases {
-        make_bitflags!(HookPhase::Access)
+        HookPhases::new(HookPhase::Access)
     }
 
     fn matcher_mut(&mut self) -> Option<&mut Box<dyn Matcher>> {
