@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 use caramelo::{expect, matchers::eq};
 use deboa::{
     cert::{CertificateExt, ContentEncoding},
@@ -6,22 +8,18 @@ use deboa::{
 use deboa_tokio::cert::DeboaCertificate;
 use http::{StatusCode, Version};
 use tokio::fs;
-use vetis::{
-    VetisTestResult,
-    host::{Host as _, HostConfig},
-};
-use vetis_rev_proxy::{ReverseProxyHookConfig, tokio::ReverseProxyHook};
+use vetis::{VetisTestResult, host::HostConfig};
+use vetis_rev_proxy::ReverseProxyHookConfig;
 use vetis_tokio::{
     Response, TlsConfig, Vetis, VetisServer as _,
-    hook::{HandlerHook, handler_fn},
-    host::Host,
+    hook::{HandlerHookConfig, handler_fn},
 };
 
 use crate::common::{CA_CERT, SERVER_CERT, SERVER_KEY};
 
 #[tokio::test]
 async fn test_get_proxy_to_target() -> VetisTestResult<()> {
-    let security_config = TlsConfig::builder()
+    let tls_config = TlsConfig::builder()
         .ca_file(CA_CERT)
         .cert_file(SERVER_CERT)
         .key_file(SERVER_KEY)
@@ -30,58 +28,37 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
     let source_host_config = HostConfig::builder()
         .hostname("localhost")
         .root_directory(".")
-        .protos(&[Version::HTTP_11])
-        .tls(security_config)
-        .bind_addresses(&[(
-            "0.0.0.0"
-                .parse()
-                .unwrap(),
-            8084,
-        )])
+        .tls(tls_config)
+        .add_proto(Version::HTTP_11)
+        .add_bind_address(Ipv4Addr::UNSPECIFIED, 8084)
+        .add_hook(
+            ReverseProxyHookConfig::builder()
+                .target("http://localhost:8085")
+                .build()?,
+        )
         .build()?;
-
-    let mut source_host = Host::new(source_host_config).await?;
-    source_host.add_hook(ReverseProxyHook::new(
-        ReverseProxyHookConfig::builder()
-            .target("http://localhost:8085")
-            .build()?,
-    ));
 
     let target_host_config = HostConfig::builder()
         .hostname("localhost")
         .root_directory(".")
-        .bind_addresses(&[(
-            "0.0.0.0"
-                .parse()
-                .unwrap(),
-            8085,
-        )])
+        .add_bind_address(Ipv4Addr::UNSPECIFIED, 8085)
+        .add_hook(
+            HandlerHookConfig::builder()
+                .handler(handler_fn(|_request| async move {
+                    let response = Response::builder()
+                        .status(StatusCode::OK)
+                        .text("Hello, world!");
+                    Ok(response)
+                }))
+                .build()?,
+        )
         .build()?;
 
-    let mut target_host = Host::new(target_host_config).await?;
-    target_host.add_hook(
-        HandlerHook::builder()
-            .handler(handler_fn(|_request| async move {
-                let response = Response::builder()
-                    .status(StatusCode::OK)
-                    .text("Hello, world!");
-                Ok(response)
-            }))
-            .build()?,
-    );
-
-    assert_eq!(
-        target_host
-            .config()
-            .hostname(),
-        "localhost"
-    );
+    assert_eq!(target_host_config.hostname(), "localhost");
 
     let mut server = Vetis::builder()
-        .add_host(source_host)
-        .await?
-        .add_host(target_host)
-        .await?
+        .add_host(source_host_config)
+        .add_host(target_host_config)
         .build();
 
     server
@@ -116,7 +93,7 @@ async fn test_get_proxy_to_target() -> VetisTestResult<()> {
 
 #[tokio::test]
 async fn test_post_proxy_to_target() -> VetisTestResult<()> {
-    let security_config = TlsConfig::builder()
+    let tls_config = TlsConfig::builder()
         .ca_file(CA_CERT)
         .cert_file(SERVER_CERT)
         .key_file(SERVER_KEY)
@@ -125,60 +102,39 @@ async fn test_post_proxy_to_target() -> VetisTestResult<()> {
     let source_host_config = HostConfig::builder()
         .hostname("localhost")
         .root_directory(".")
-        .protos(&[Version::HTTP_11])
-        .tls(security_config.clone())
-        .bind_addresses(&[(
-            "0.0.0.0"
-                .parse()
-                .unwrap(),
-            9093,
-        )])
+        .tls(tls_config.clone())
+        .add_proto(Version::HTTP_11)
+        .add_bind_address(Ipv4Addr::UNSPECIFIED, 9093)
+        .add_hook(
+            ReverseProxyHookConfig::builder()
+                .target("http://localhost:9094")
+                .build()?,
+        )
         .build()?;
-
-    let mut source_host = Host::new(source_host_config).await?;
-    source_host.add_hook(ReverseProxyHook::new(
-        ReverseProxyHookConfig::builder()
-            .target("http://localhost:9094")
-            .build()?,
-    ));
 
     let target_host_config = HostConfig::builder()
         .hostname("localhost")
         .root_directory(".")
-        .bind_addresses(&[(
-            "0.0.0.0"
-                .parse()
-                .unwrap(),
-            9094,
-        )])
+        .add_bind_address(Ipv4Addr::UNSPECIFIED, 9094)
+        .add_hook(
+            HandlerHookConfig::builder()
+                .handler(handler_fn(|request| async move {
+                    let (_, body) = request.into_parts();
+                    let response = Response::builder()
+                        .status(StatusCode::OK)
+                        .body(body);
+
+                    Ok(response)
+                }))
+                .build()?,
+        )
         .build()?;
 
-    let mut target_host = Host::new(target_host_config).await?;
-    target_host.add_hook(
-        HandlerHook::builder()
-            .handler(handler_fn(|request| async move {
-                let (_, body) = request.into_parts();
-                let response = Response::builder()
-                    .status(StatusCode::OK)
-                    .body(body);
-
-                Ok(response)
-            }))
-            .build()?,
-    );
-
-    assert_eq!(
-        target_host
-            .config()
-            .hostname(),
-        "localhost"
-    );
+    assert_eq!(target_host_config.hostname(), "localhost");
 
     let mut server = Vetis::builder()
-        .add_host(source_host)
-        .await?
-        .add_host(target_host)
-        .await?
+        .add_host(source_host_config)
+        .add_host(target_host_config)
         .build();
 
     server

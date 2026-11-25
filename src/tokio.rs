@@ -7,7 +7,7 @@ use once_cell::sync::Lazy;
 use vetis::{
     Request, Response, VetisFutureResult,
     errors::{HostError, RuntimeError, VetisError},
-    hook::{Hook, HookConfig as _, HookPhase, HookPhases},
+    hook::{Hook, HookConfig as _, HookPhase},
     matcher::Matcher,
 };
 
@@ -38,23 +38,32 @@ impl ReverseProxyHook {
     ///
     /// * `ProxyHook` - The proxy path
     pub fn new(config: ReverseProxyHookConfig) -> ReverseProxyHook {
-        let matcher = if let Some(matcher_config) = config.matcher() {
-            Some(matcher_config.boxed_matcher())
-        } else {
-            None
-        };
-
-        ReverseProxyHook { matcher, config }
+        ReverseProxyHook { matcher: None, config }
     }
 }
 
 impl Hook for ReverseProxyHook {
+    fn setup<'a>(&'a mut self) -> VetisFutureResult<'a, ()> {
+        Box::pin(async move {
+            let matcher = if let Some(matcher_config) = self
+                .config
+                .matcher()
+            {
+                Some(matcher_config.boxed_matcher())
+            } else {
+                None
+            };
+            self.matcher = matcher;
+            Ok(())
+        })
+    }
+
     fn has_matches(&self, context: &Context) -> bool {
         if let Some(matcher) = &self.matcher { matcher.is_match(context) } else { true }
     }
 
-    fn phases(&self) -> HookPhases {
-        HookPhases::new(HookPhase::Access)
+    fn phase(&self) -> HookPhase {
+        HookPhase::Content
     }
 
     fn matcher_mut(&mut self) -> Option<&mut Box<dyn Matcher>> {

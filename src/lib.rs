@@ -30,7 +30,7 @@ impl ReverseProxyHookConfigBuilder {
     /// # Returns
     ///
     /// * `Self` - The builder.
-    pub fn add_matcher<M>(mut self, matcher: M) -> Self
+    pub fn matcher<M>(mut self, matcher: M) -> Self
     where
         M: MatcherConfig + Send + Sync + 'static,
     {
@@ -75,8 +75,6 @@ impl ReverseProxyHookConfigBuilder {
 pub struct ReverseProxyHookConfig {
     matcher: Option<Box<dyn MatcherConfig>>,
     target: String,
-    // TODO: Add custom reverse proxy rules
-    // TODO: Add support for custom headers
 }
 
 #[typetag::serde(name = "rev-proxy")]
